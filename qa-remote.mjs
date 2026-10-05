@@ -3,9 +3,10 @@
 // Uso: node qa-remote.mjs <comando> [args] [--serial X] [--ms N] [--out fichero]
 //   tap X Y | longtap X Y | swipe X Y X2 Y2 | text "..." | tapText "..." | tapId id
 //   wait "texto" | dump | screenshot [fichero] | back | home | recents
+//   awake on|off|status (pantalla encendida durante la prueba y restaurar al acabar)
 import { spawnSync } from "node:child_process";
-import { existsSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, writeFileSync, readFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const COMPONENT = "dev.qaremote/.CommandReceiver";
@@ -125,8 +126,37 @@ switch (command) {
     console.log(`OK: captura en ${file}`);
     break;
   }
+  case "awake": {
+    // adb directo: 'settings put system' y 'svc power' funcionan aunque el
+    // fabricante bloquee la inyeccion. Mismo fichero de estado que qa-remote.ps1.
+    need(1);
+    const id = opts.serial || (adb(["get-serialno"]).stdout || "").trim();
+    const base = process.env.LOCALAPPDATA || join(process.env.HOME || tmpdir(), ".local", "share");
+    const state = join(base, "qa-remote", `awake-${id}.txt`);
+    const sh = (c) => (adb(["shell", c]).stdout || "").trim();
+    if (rest[0] === "on") {
+      if (!existsSync(state)) {
+        mkdirSync(dirname(state), { recursive: true });
+        writeFileSync(state, sh("settings get system screen_off_timeout"));
+      }
+      sh("settings put system screen_off_timeout 1800000");
+      sh("svc power stayon usb");
+      console.log(`OK: awake on · pantalla encendida mientras haya USB (original guardado: ${readFileSync(state, "utf8").trim()})`);
+    } else if (rest[0] === "off") {
+      const orig = existsSync(state) ? readFileSync(state, "utf8").trim() : "30000";
+      sh(`settings put system screen_off_timeout ${num(orig)}`);
+      sh("svc power stayon false");
+      if (existsSync(state)) unlinkSync(state);
+      console.log(`OK: awake off · bloqueo restaurado a ${orig} ms`);
+    } else if (rest[0] === "status") {
+      const stay = sh("dumpsys power").split("\n").find((l) => l.includes("mStayOn=")) || "";
+      const saved = existsSync(state) ? readFileSync(state, "utf8").trim() : "(ninguno)";
+      console.log(`OK: screen_off_timeout=${sh("settings get system screen_off_timeout")} · ${stay.trim()} · original guardado=${saved}`);
+    } else fail("Uso: awake on|off|status");
+    break;
+  }
   default:
     fail(
-      "Uso: node qa-remote.mjs <tap|longtap|swipe|text|back|home|recents|tapText|tapId|dump|screenshot|wait> [args] [--serial X] [--ms N] [--out f]",
+      "Uso: node qa-remote.mjs <tap|longtap|swipe|text|back|home|recents|tapText|tapId|dump|screenshot|wait|awake> [args] [--serial X] [--ms N] [--out f]",
     );
 }

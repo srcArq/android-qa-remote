@@ -14,10 +14,13 @@
   .\qa-remote.ps1 screenshot -Out pantalla.png
   .\qa-remote.ps1 back | home | recents
   .\qa-remote.ps1 tap 100 200 -Serial abc123
+  .\qa-remote.ps1 awake on    # pantalla siempre encendida durante la prueba
+  .\qa-remote.ps1 awake off   # restaura el tiempo de bloqueo original
+  .\qa-remote.ps1 awake status
 #>
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('tap', 'longtap', 'swipe', 'text', 'back', 'home', 'recents', 'tapText', 'tapId', 'dump', 'screenshot', 'wait')]
+    [ValidateSet('tap', 'longtap', 'swipe', 'text', 'back', 'home', 'recents', 'tapText', 'tapId', 'dump', 'screenshot', 'wait', 'awake')]
     [string]$Command,
     [Parameter(Position = 1, ValueFromRemainingArguments = $true)]
     [string[]]$Rest = @(),
@@ -106,6 +109,40 @@ switch ($Command) {
         cmd /c "`"$Adb`" $s exec-out screencap -p > `"$file`""
         if ((Test-Path $file) -and (Get-Item $file).Length -gt 0) { Write-Output "OK: captura en $file" }
         else { Write-Output 'ERROR: captura vacia (¿FLAG_SECURE?)'; $ok = $false }
+    }
+    'awake' {
+        # Usa adb directamente (no la app): 'settings put system' y 'svc power'
+        # funcionan desde el shell aunque el fabricante bloquee la inyeccion.
+        # El valor original se guarda por dispositivo para restaurarlo luego.
+        Need 1
+        $id = if ($Serial) { $Serial } else { ((Invoke-Adb @('get-serialno')) -join '').Trim() }
+        $state = Join-Path $env:LOCALAPPDATA "qa-remote\awake-$id.txt"
+        switch ($Rest[0]) {
+            'on' {
+                if (-not (Test-Path $state)) {
+                    $orig = ((Invoke-Adb @('shell', 'settings get system screen_off_timeout')) -join '').Trim()
+                    New-Item -ItemType Directory -Force (Split-Path $state) | Out-Null
+                    Set-Content -Path $state -Value $orig -Encoding ASCII
+                }
+                Invoke-Adb @('shell', 'settings put system screen_off_timeout 1800000') | Out-Null
+                Invoke-Adb @('shell', 'svc power stayon usb') | Out-Null
+                Write-Output "OK: awake on · pantalla encendida mientras haya USB (original guardado: $(Get-Content $state))"
+            }
+            'off' {
+                $orig = if (Test-Path $state) { (Get-Content $state).Trim() } else { '30000' }
+                Invoke-Adb @('shell', "settings put system screen_off_timeout $orig") | Out-Null
+                Invoke-Adb @('shell', 'svc power stayon false') | Out-Null
+                Remove-Item $state -ErrorAction SilentlyContinue
+                Write-Output "OK: awake off · bloqueo restaurado a $orig ms"
+            }
+            'status' {
+                $cur = ((Invoke-Adb @('shell', 'settings get system screen_off_timeout')) -join '').Trim()
+                $stay = ((Invoke-Adb @('shell', 'dumpsys power')) | Select-String 'mStayOn=') -join ''
+                $saved = if (Test-Path $state) { (Get-Content $state).Trim() } else { '(ninguno)' }
+                Write-Output "OK: screen_off_timeout=$cur · $($stay.Trim()) · original guardado=$saved"
+            }
+            default { throw "Uso: awake on|off|status" }
+        }
     }
 }
 if (-not $ok) { exit 1 }

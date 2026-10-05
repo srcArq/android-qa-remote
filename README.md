@@ -80,6 +80,19 @@ Uso directo sin scripts:
 adb shell am broadcast -n dev.qaremote/.CommandReceiver -a dev.qaremote.CMD --es cmd tap --es x 540 --es y 1200
 ```
 
+## Pantalla encendida durante la prueba
+
+```powershell
+.\qa-remote.ps1 awake on -Serial X      # bloqueo a 30 min + siempre encendida con USB
+.\qa-remote.ps1 awake status -Serial X  # valor actual y original guardado
+.\qa-remote.ps1 awake off -Serial X     # restaura el bloqueo original y quita "siempre encendida"
+```
+
+- `awake on` guarda el tiempo de bloqueo original del dispositivo en `%LOCALAPPDATA%\qa-remote\awake-<serial>.txt` (solo la primera vez, para no pisarlo si se repite) y `awake off` lo restaura y borra el fichero. Si no hay original guardado, restaura 30 s.
+- Usa `adb` directamente (`settings put system screen_off_timeout` y `svc power stayon usb`), que funciona aunque el fabricante bloquee la inyección de toques. No necesita la app.
+- **Ejecuta siempre `awake off` al terminar**, también si la prueba falla (por ejemplo en un `finally`).
+- Mismo comando en Node: `node qa-remote.mjs awake on|off|status --serial X`.
+
 ## Grabar la pantalla
 
 `.\record.ps1 [-Seconds 120] [-Out recordings\prueba.mp4] [-Serial X]`
