@@ -1,0 +1,23 @@
+# Build
+.gradle/
+build/
+app/build/
+local.properties
+.idea/
+*.iml
+captures/
+.kotlin/
+
+# Firma (nunca en git)
+keystore/
+keystore.properties
+*.jks
+*.keystore
+
+# Binarios externos y salidas
+tools/
+out/
+recordings/
+*.mp4
+*.png
+dump*.json

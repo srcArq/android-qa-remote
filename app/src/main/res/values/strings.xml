@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">QA Remote</string>
+    <string name="service_label">QA Remote</string>
+    <string name="service_description">Permite que un PC conectado por ADB ejecute toques, gestos y lecturas de pantalla para pruebas de QA. Solo acepta órdenes del shell de ADB. Desactívalo al terminar.</string>
+</resources>
