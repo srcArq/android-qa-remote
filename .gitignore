@@ -21,3 +21,10 @@ recordings/
 *.mp4
 *.png
 dump*.json
+
+# Artefactos y secretos locales
+*.apk
+*.aab
+.env
+.env.*
+*.log
